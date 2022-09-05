@@ -30,7 +30,7 @@ If you wish to do so, please:
 
 - Watch the project.
 - Turn on Notifications so you are aware of the Discussions postings.
-- Read the Introductions thread in [Discussions][https://github.com/kaveh808/kons-9/discussions].
+- Read the Introductions thread in [Discussions](https://github.com/kaveh808/kons-9/discussions).
 - Post your own introduction on the thread.
 - Join the Discussions and look at the open Issues.
 
