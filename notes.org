@@ -1,0 +1,28 @@
+* Notes
+** install
+*** required libraries
+On Ubuntu like Linux I had to install missing library
+#+begin_example
+sudo apt install libglfw3-dev
+#+end_example
+
+*** the repo
+Pull code from my fork
+#+begin_example
+cd ~/Programming/Lisp
+git clone git@github.com:bigos/kons-9.git
+#+end_example
+
+** first run
+Use REPL to load the code my way.
+
+#+begin_example
+(push #p "~/Programming/Lisp/kons-9/" ql:*local-project-directories*)
+(ql:quickload "kons-9")
+(in-package :kons-9)
+#+end_example
+
+And run the code
+#+begin_example
+(run)
+#+end_example
