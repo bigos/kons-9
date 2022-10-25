@@ -21,14 +21,8 @@
     (let ((dup (make-instance (class-name (class-of item)))))
       (copy-instance-data dup item)
       dup))
-
-  (:method ((val t))
-    (etypecase val
-      (point (p-copy val))))
-
   (:method ((seq sequence))
     (copy-seq seq))
-
   (:method ((a array))
     (if (and (arrayp a) (equal '(4 4) (array-dimensions a)))
         (matrix-copy a)
@@ -39,7 +33,7 @@
   `(setf (,slot dst) (,slot src)))
 
 (defmacro copy-point-slot (slot)
-  `(setf (,slot dst) (p-copy (,slot src))))
+  `(setf (,slot dst) (p:copy (,slot src))))
 
 (defmacro copy-array-slot (slot)
   `(setf (,slot dst) (map 'vector #'duplicate (,slot src))))
@@ -74,9 +68,9 @@
     (copy-simple-slot show-axis)
     (copy-simple-slot show-bounds?))
 
-  (:method ((dst group) (src group))
+  (:method ((dst shape-group) (src shape-group))
     (call-next-method)
-    (copy-list-slot children))
+    (copy-array-slot children))
 
   (:method ((dst point-cloud) (src point-cloud))
     (call-next-method)
@@ -152,7 +146,7 @@
 
   (:method ((dst motion-group) (src motion-group))
     (call-next-method)
-    (copy-list-slot children))
+    (copy-array-slot children))
 
   (:method ((dst animator) (src animator))
     (call-next-method)
@@ -175,8 +169,8 @@
 
   (:method ((dst scene) (src scene))
     (call-next-method)
-    (copy-list-slot shapes)
-    (copy-list-slot motions)
+    (copy-instance-slot shape-root)
+    (copy-instance-slot motion-root)
     (copy-list-slot selection)
     ;; initialized? -- do not copy
     (copy-simple-slot start-frame)

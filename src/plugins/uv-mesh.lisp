@@ -46,8 +46,8 @@
             (setf (aref (point-colors mesh) (uv-mesh-1d-ref mesh  u v))
                   (funcall color-fn u0 v0))))))))
 
-(defmethod set-point-colors-by-uv ((group group) color-fn)
-  (dolist (child (children group))
+(defmethod set-point-colors-by-uv ((group shape-group) color-fn)
+  (do-children (child group)
     (set-point-colors-by-uv child color-fn)))
 
 (defun index+1 (index dim wrap?)
@@ -154,11 +154,11 @@
 					 (setf i2 i))))
 	      (t (progn (setf i1 (1- i))
 			(setf i2 (1+ i))))))
-    (p-normalize (p- (nth i2 points) (nth i1 points)))))
+    (p:normalize (p:- (nth i2 points) (nth i1 points)))))
 
 (defun curve-remove-consecutive-duplicates (curve)
     (if (and curve (> (length curve) 1))
-        (if (p= (car curve) (cadr curve))
+        (if (p:= (car curve) (cadr curve))
             (curve-remove-consecutive-duplicates (cons (car curve) (cddr curve)))
             (cons (car curve) (curve-remove-consecutive-duplicates (cdr curve))))
         curve))
@@ -167,7 +167,8 @@
 ;;; TODO -- optimize, remove coerce of points to list and then array
 (defmethod sweep-extrude-aux ((mesh uv-mesh) profile-points is-closed-profile? path-points is-closed-path?
                               &key (twist 0.0) (taper 1.0) (from-end? nil))
-  (let ((unique-path-points (curve-remove-consecutive-duplicates (coerce path-points 'list)))); fix this
+  (declare (optimize debug))
+  (let ((unique-path-points (curve-remove-consecutive-duplicates (coerce path-points 'list)))) ; fix this
     (when (or (< (length profile-points) 2)
               (< (length unique-path-points) 2))
       (return-from sweep-extrude-aux (make-instance 'uv-mesh))) ;return empty mesh -- throw error?
@@ -175,7 +176,7 @@
     (setf (v-dim mesh) (length unique-path-points))
     (setf (u-wrap mesh) is-closed-profile?)
     (setf (v-wrap mesh) is-closed-path?)
-    (setf (v-cap mesh) t)
+    (setf (v-cap mesh) is-closed-profile?)
     (let* ((delta (/ 1.0 (1- (v-dim mesh))))
            (prev-tangent +z-axis+)
            (p0 +origin+)
@@ -188,24 +189,24 @@
             :for v :from 0
             :do (let* ((factor (tween v 0.0 (- (v-dim mesh) 1)))
                        (tangent (curve-tangent v path-points-2 (v-wrap mesh))))
-                  (when (p= tangent +origin+) ;heuristic to avoid null tangent in P0-P1-P0 case
+                  (when (p:= tangent +origin+) ;heuristic to avoid null tangent in P0-P1-P0 case
                     (setf tangent prev-tangent))
-                  (let* ((r1-mtx (make-axis-rotation-matrix (p-angle prev-tangent tangent)
-                                                            (p-cross prev-tangent tangent)
+                  (let* ((r1-mtx (make-axis-rotation-matrix (p-angle prev-tangent tangent) ;p:angle barfs if tangents are equal, should tangents be equal?
+                                                            (p:cross prev-tangent tangent)
                                                             p1))
                          (r2-mtx (make-axis-rotation-matrix (* delta twist) tangent p1))
-                         (t-mtx (make-translation-matrix (p- p1 p0)))
+                         (t-mtx (make-translation-matrix (p:- p1 p0)))
                          (mtx (matrix-multiply-n t-mtx r1-mtx r2-mtx)))
                     (transform-point-list! points mtx)
                     (setf prev-tangent tangent)
                     (setf p0 p1)
                     (let ((scaled-points (copy-points points))
-                          (s-mtx (make-scale-matrix (p-lerp factor (p! 1 1 1) (p! taper taper taper))
+                          (s-mtx (make-scale-matrix (p:lerp (p! 1 1 1) (p! taper taper taper) factor)
                                                     p1)))
                       (transform-point-list! scaled-points s-mtx)		      
                       (loop :for p2 :in scaled-points
                             :for u :from 0
-                            :do (setf (aref (uv-point-array mesh) u v) (p-copy p2)))))))
+                            :do (setf (aref (uv-point-array mesh) u v) (p:copy p2)))))))
       (compute-polyhedron-data mesh))))
 
 ;;; TODO -- cleanup
@@ -306,3 +307,22 @@
                               longitude-segments
                               :v-wrap t
                               :v-cap nil)))
+
+;;;; gui =======================================================================
+
+(defun uv-mesh-command-table ()
+  (let ((table (make-instance `command-table :title "Create UV Mesh")))
+    (ct-make-shape :C "Cone"     (make-cone-uv-mesh 2 2 16 7))
+    (ct-make-shape :Y "Cylinder" (make-cylinder-uv-mesh 1.5 3 16 4))
+    (ct-make-shape :G "Grid"     (make-grid-uv-mesh 3 1.5 1 1))
+    (ct-make-shape :P "Prism"    (make-rect-prism-uv-mesh 1.5 3 4 2))
+    (ct-make-shape :R "Pyramid"  (make-pyramid-uv-mesh 2 2 5 3))
+    (ct-make-shape :S "Sphere"   (make-sphere-uv-mesh 1.5 8 16))
+    (ct-make-shape :T "Torus"    (make-torus-uv-mesh 1.0 2.0 8 32))
+    table))
+
+(register-dynamic-command-table-entry
+ "Create" :u "Create UV Mesh Menu"
+ (lambda () (make-active-command-table (uv-mesh-command-table)))
+ (lambda () t))
+

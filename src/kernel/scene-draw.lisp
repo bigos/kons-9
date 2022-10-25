@@ -5,11 +5,12 @@
 (defgeneric draw (obj)
   
   (:method ((scene scene))
-    (mapc #'draw (shapes scene)))
+    (draw (shape-root scene)))
 
-  (:method ((group group))
+  (:method ((group shape-group))
     (when (is-visible? group)
-      (mapc #'draw (children group))))
+      (do-children (child group)
+        (draw child))))
 
   ;; push matrix and do transform operations before drawing
   (:method :before ((shape shape))
@@ -40,14 +41,14 @@
   (:method ((p-cloud point-cloud))
     (when (is-visible? p-cloud)
       (when *display-points?*
-        (draw-points p-cloud))))
+        (draw-points p-cloud t))))
 
   (:method ((curve curve))
     (when (is-visible? curve)
       (when *display-wireframe?*
         (draw-wireframe curve))
       (when *display-points?*
-        (draw-points curve))))
+        (draw-points curve nil))))
 
   (:method ((polyh polyhedron))
     (when (is-visible? polyh)
@@ -61,7 +62,7 @@
       (when *display-wireframe?*
         (3d-draw-wireframe-polygons (points polyh) (faces polyh)))
       (when *display-points?*
-        (draw-points polyh))
+        (draw-points polyh nil))
       (when (show-normals polyh)
         (draw-normals polyh))))
   )
@@ -74,31 +75,29 @@
 (defmethod draw-bounds ((shape shape) &optional (color (c! 0 1 1)))
   (multiple-value-bind (lo hi)
       (get-bounds shape)
-    (3d-draw-bounds lo hi color)))
+    (when (and lo hi)
+      (3d-draw-bounds lo hi color))))
 
 (defmethod draw-selected ((shape shape))
   (draw-bounds shape (c! 1 0 0)))
 
 ;;; point-cloud helper methods -------------------------------------------------
 
-(defmethod draw-points ((p-cloud point-cloud))
-  (3d-draw-points (points p-cloud)))
+(defmethod draw-points ((p-cloud point-cloud) use-point-colors?)
+  (3d-draw-points (points p-cloud) (if use-point-colors? (point-colors p-cloud) nil)))
 
 ;;; curve helper methods -----------------------------------------------------
 (defmethod draw-wireframe ((curve curve))
   (3d-draw-curve (points curve) (is-closed-curve? curve)))
-
-;; (defmethod draw-points ((curve curve))
-;;   (3d-draw-points (points curve)))
 
 ;;; polyhedron helper methods --------------------------------------------------
 
 (defmethod draw-normals ((polyh polyhedron))
   (let ((lines ()))
     (dotimes (f (length (faces polyh)))
-      (let* ((points (face-points polyh f))
-             (p0 (p-center points))
-             (p1 (p+ p0 (p* (aref (face-normals polyh) f) (show-normals polyh)))))
+      (let* ((points (face-points-list polyh f))
+             (p0 (apply #'p-average points))
+             (p1 (p:+ p0 (p:scale (aref (face-normals polyh) f) (show-normals polyh)))))
         (push p1 lines)
         (push p0 lines)))
     (3d-draw-lines lines)))

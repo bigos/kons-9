@@ -28,11 +28,11 @@
 					 (setf i2 i))))
 	      (t (progn (setf i1 (1- i))
 			(setf i2 (1+ i))))))
-    (p-normalize (p- (aref points i2) (aref points i1)))))
+    (p:normalize (p:- (aref points i2) (aref points i1)))))
 
 (defun curve-tangents-aux (points &optional (is-closed? nil))
   (let ((tangents (make-array (length points))))
-    (doarray (i p points)
+    (do-array (i p points)
       (declare (ignore p))
       (setf (aref tangents i) (curve-point-tangent i points is-closed?)))
     tangents))
@@ -40,11 +40,14 @@
 (defmethod curve-tangents ((curve curve))
   (curve-tangents-aux (points curve) (is-closed-curve? curve)))
 
+(defmethod curve-point-dist ((curve curve) point)
+  (point-curve-dist point (points curve) (is-closed-curve? curve)))
+        
 ;;; curve shape functions ----------------------------------------------------
 
 (defun make-line-curve (p1 p2 num-segments)
   (make-curve (make-line-points p1 p2 num-segments)
-                nil))
+              nil))
 
 (defun make-rectangle-curve (width height &optional (num-segments 1))
   (make-curve (make-rectangle-points width height num-segments)))
@@ -57,11 +60,11 @@
 
 (defun make-arc-curve (diameter start-angle end-angle num-segments)
   (make-curve (make-arc-points diameter start-angle end-angle num-segments)
-                nil))
+              nil))
 
 (defun make-spiral-curve (start-diameter end-diameter length loops num-segments)
   (make-curve (make-spiral-points start-diameter end-diameter length loops num-segments)
-                nil))
+              nil))
 
 (defun make-sine-curve-curve (period frequency x-scale y-scale num-segments)
   (make-curve (make-sine-curve-points period frequency x-scale y-scale num-segments)

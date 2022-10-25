@@ -95,21 +95,22 @@ Using a GENERALIZED-TRANSFORM. Should exactly match (Demo 05 uv-mesh).
 A sweep extrude operation creates a UV-MESH by sweeping a profile CURVE along
 a path CURVE. The profile and path can be open or closed.
 |#
-(with-clear-scene
+(with-clear-scene 
   (let* ((path (make-sine-curve-curve 360 1 4 2 64))
          (prof (make-circle-curve 1.0 4))
          (mesh (sweep-extrude-uv-mesh prof path :twist (* 2 pi) :taper 0.0)))
+    (setf (name mesh) 'mesh)
     (add-shape *scene* mesh)))
 #|
 Assign point colors to the UV-MESH by uv.
 |#
-(set-point-colors-by-uv (first (shapes *scene*))
+(set-point-colors-by-uv (find-shape-by-name *scene* 'mesh)
                         (lambda (u v) (declare (ignore u)) (c-rainbow v)))
 #|
 Assign point colors to the UV-MESH by xyz.
 |#
-(set-point-colors-by-xyz (first (shapes *scene*))
-                         (lambda (p) (c-rainbow (clamp (tween (y p) -2 2) 0.0 1.0))))
+(set-point-colors-by-xyz (find-shape-by-name *scene* 'mesh)
+                         (lambda (p) (c-rainbow (clamp (tween (p:y p) -2 2) 0.0 1.0))))
 
 #|
 (Demo 08 uv-mesh) function-extrude-uv-mesh ====================================

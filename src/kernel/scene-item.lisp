@@ -19,10 +19,11 @@
 
 ;;;; scene-item ================================================================
 
-(defclass scene-item (item)
-  ((name :accessor name :initarg :name :initform nil)
-   (scene :accessor scene :initarg :scene :initform nil)
-   (is-selected? :accessor is-selected? :initarg :is-selected? :initform nil)))
+(defclass-kons-9 scene-item (item)
+  ((name nil)
+   (scene nil)
+   (parents '())
+   (is-selected? nil)))
 
 (defmethod initialize-instance :after ((item scene-item) &rest initargs)
   (declare (ignore initargs))
@@ -33,17 +34,3 @@
 (defmethod printable-data ((self scene-item))
   (format nil "~a" (name self)))
 
-(defmethod select ((item scene-item))
-  (setf (is-selected? item) t)
-  (when (scene item)
-    (add-selection (scene item) item)))
-
-(defmethod unselect ((item scene-item))
-  (setf (is-selected? item) nil)
-  (when (scene item)
-    (remove-selection (scene item) item)))
-
-(defmethod toggle-select ((item scene-item))
-  (if (is-selected? item)
-      (unselect item)
-      (select item)))

@@ -4,6 +4,7 @@
 
 (defclass drawing-settings ()
   ((monitor-scale :accessor monitor-scale :initarg :monitor-scale :initform 1.0)
+   (default-font :accessor default-font :initarg :default-font :initform (asdf:system-relative-pathname "kons-9" "data/font/DejaVuSansMono.ttf"))
    (point-size :accessor point-size :initarg :point-size :initform 3.0)
    (line-thickness :accessor line-thickness :initarg :line-thickness :initform 1.0)
    (fg-color :accessor fg-color :initarg :fg-color :initform (c! 0 0 0))
@@ -18,6 +19,8 @@
    (ground-plane-thickness :accessor ground-plane-thickness :initarg :ground-plane-thickness :initform 1.0)
    (ground-plane-color :accessor ground-plane-color :initarg :ground-plane-color :initform (c! .8 .8 .8))
    (secondary-line-thickness :accessor secondary-line-thickness :initarg :secondary-line-thickness :initform 1.0)))
+
+(defparameter *drawing-settings* (make-instance 'drawing-settings))
 
 (defun set-lines-thin ()
   (setf (point-size *drawing-settings*) (* 3.0 (monitor-scale *drawing-settings*)))
@@ -65,14 +68,6 @@
 (set-ground-plane-dense)
 
 |#
-
-(defparameter *drawing-settings* (make-instance 'drawing-settings))
-
-(defparameter *shading-color* (c! 1 1 1))
-(defparameter *light-color* (c! 2 2 2))
-(defparameter *fg-color* (c! 0 0 0))
-(defparameter *bg-color* (c! 1 1 1))
-(defparameter *sel-color* (c! 1 0 0))
 
 ;;;; utils =====================================================================
 
@@ -157,9 +152,9 @@
   (setf *cam-side-dist* 0.0)
   (setf *cam-up-dist* 0.0)) ;-2.0))
 
-(defun gl-enable-light (light-id dir &optional (color *light-color*))
+(defun gl-enable-light (light-id dir &optional (color (light-color *drawing-settings*)))
   (gl:enable light-id)
-  (gl:light light-id :position (vector (x dir) (y dir) (z dir) 0.0))
+  (gl:light light-id :position (vector (p:x dir) (p:y dir) (p:z dir) 0.0))
   (gl:light light-id :ambient (vector 0.25 0.25 0.25 1.0))
   (gl:light light-id :diffuse color)
   (gl:light light-id :specular color))
@@ -214,6 +209,9 @@
 
 ;;; 3d display =================================================================
 
+(defun 3d-translate (p)
+  (gl:translate (p:x p) (p:y p) (p:z p)))
+
 (defun 3d-push-matrix (matrix)
   (gl:push-matrix)
   (gl:mult-matrix (matrix->vector matrix))) ;is order correct?
@@ -250,32 +248,34 @@
 
 (defun 3d-draw-bounds (lo hi color)
   (with-gl-disable :lighting
-    (gl:line-width (line-thickness *drawing-settings*))
+    (gl:line-width (* 2 (line-thickness *drawing-settings*))) ;otherwise not visible for cubes etc.
     (gl-set-color color)
-    (gl:begin :lines)
-      (when (and lo hi)
-        (let ((x0 (x lo))
-              (y0 (y lo))
-              (z0 (z lo))
-              (x1 (x hi))
-              (y1 (y hi))
-              (z1 (z hi)))
-          (gl:vertex x0 y0 z0) (gl:vertex x1 y0 z0)
-          (gl:vertex x1 y0 z0) (gl:vertex x1 y0 z1)
-          (gl:vertex x1 y0 z1) (gl:vertex x0 y0 z1)
-          (gl:vertex x0 y0 z1) (gl:vertex x0 y0 z0)
+    (when (and lo hi)
+      (let ((x0 (p:x lo))
+            (y0 (p:y lo))
+            (z0 (p:z lo))
+            (x1 (p:x hi))
+            (y1 (p:y hi))
+            (z1 (p:z hi)))
+        (gl:begin :lines)
 
-          (gl:vertex x0 y1 z0) (gl:vertex x1 y1 z0)
-          (gl:vertex x1 y1 z0) (gl:vertex x1 y1 z1)
-          (gl:vertex x1 y1 z1) (gl:vertex x0 y1 z1)
-          (gl:vertex x0 y1 z1) (gl:vertex x0 y1 z0)
-
-          (gl:vertex x0 y0 z0) (gl:vertex x0 y1 z0)
-          (gl:vertex x1 y0 z0) (gl:vertex x1 y1 z0)
-          (gl:vertex x1 y0 z1) (gl:vertex x1 y1 z1)
-          (gl:vertex x0 y0 z1) (gl:vertex x0 y1 z1)
-
-          (gl:end)))))
+        (gl:vertex x0 y0 z0) (gl:vertex x1 y0 z0)
+        (gl:vertex x1 y0 z0) (gl:vertex x1 y0 z1)
+        (gl:vertex x1 y0 z1) (gl:vertex x0 y0 z1)
+        (gl:vertex x0 y0 z1) (gl:vertex x0 y0 z0)
+        
+        (gl:vertex x0 y1 z0) (gl:vertex x1 y1 z0)
+        (gl:vertex x1 y1 z0) (gl:vertex x1 y1 z1)
+        (gl:vertex x1 y1 z1) (gl:vertex x0 y1 z1)
+        (gl:vertex x0 y1 z1) (gl:vertex x0 y1 z0)
+        
+        (gl:vertex x0 y0 z0) (gl:vertex x0 y1 z0)
+        (gl:vertex x1 y0 z0) (gl:vertex x1 y1 z0)
+        (gl:vertex x1 y0 z1) (gl:vertex x1 y1 z1)
+        (gl:vertex x0 y0 z1) (gl:vertex x0 y1 z1)
+        
+        (gl:end)))
+    (gl-set-color (shading-color *drawing-settings*))))    ;reset color
 
 (defun 3d-pop-matrix ()
   (gl:pop-matrix))
@@ -287,11 +287,11 @@
     (if is-closed?
         (gl:begin :line-loop)
         (gl:begin :line-strip))
-    (doarray (i p points)
-      (gl:vertex (x p) (y p) (z p)))
+    (do-array (i p points)
+      (gl:vertex (p:x p) (p:y p) (p:z p)))
     (gl:end)))
 
-(defun 3d-draw-points (points &key (highlight? nil))
+(defun 3d-draw-points (points point-colors &key (highlight? nil))
   (with-gl-disable :lighting
     (if highlight?
         (progn
@@ -301,8 +301,14 @@
           (gl-set-fg-color)
           (gl:point-size (point-size *drawing-settings*))))
     (gl:begin :points)
-    (doarray (i p points)
-      (gl:vertex (x p) (y p) (z p)))
+    (cond (point-colors
+           (do-array (i p points)
+             (let ((c (aref point-colors i)))
+               (gl:color (c-red c) (c-green c) (c-blue c)))
+             (gl:vertex (p:x p) (p:y p) (p:z p))))
+          (t
+           (do-array (i p points)
+             (gl:vertex (p:x p) (p:y p) (p:z p)))))
     (gl:end)))
 
 (defun 3d-draw-lines (points &key (highlight? nil))
@@ -317,7 +323,7 @@
           (gl:line-width (line-thickness *drawing-settings*))))
     (gl:begin :lines)
     (dolist (p points)
-      (gl:vertex (x p) (y p) (z p)))
+      (gl:vertex (p:x p) (p:y p) (p:z p)))
     (gl:end)))
 
 (defun 3d-setup-lighting ()
@@ -336,25 +342,77 @@
       (3d-draw-filled-polygons-aux points faces face-normals point-normals point-colors))))
 
 (defmethod 3d-draw-filled-polygons-aux (points faces face-normals point-normals point-colors)
-  (gl-set-material *shading-color*)
-  (with-gl-enable :color-material
-    (gl:color-material :front-and-back :diffuse)
-    (dotimes (f (length faces))
-      (gl:begin :polygon)
-      (when (not *do-smooth-shading?*)
-        (let ((n (aref face-normals f)))
-          (gl:normal (x n) (y n) (z n))))
-      (dolist (pref (aref faces f))
-        (if (> (length point-colors) 0)
-            (let ((c (aref point-colors pref)))
-              (gl:color (c-red c) (c-green c) (c-blue c)))
-            (gl:color (c-red *shading-color*) (c-green *shading-color*) (c-blue *shading-color*))) ;inefficient...
-        (when *do-smooth-shading?*
-          (let ((n (aref point-normals pref)))
-            (gl:normal (x n) (y n) (z n))))
-        (let ((p (aref points pref)))
-          (gl:vertex (x p) (y p) (z p))))
-      (gl:end))))
+  (let* ((col (shading-color *drawing-settings*))
+         (r (c-red col))
+         (g (c-green col))
+         (b (c-blue col)))
+    (gl-set-material col)
+    (with-gl-enable :color-material
+      (gl:color-material :front-and-back :diffuse)
+      (cond ((and (> (length point-colors) 0) *do-smooth-shading?*)
+             (dotimes (f (length faces))
+               (gl:begin :polygon)
+               (dolist (pref (aref faces f))
+                 (let ((p (aref points pref))
+                       (n (aref point-normals pref))
+                       (c (aref point-colors pref)))
+                   (gl:color (c-red c) (c-green c) (c-blue c))
+                   (gl:normal (p:x n) (p:y n) (p:z n))
+                   (gl:vertex (p:x p) (p:y p) (p:z p))))
+               (gl:end)))
+            ((> (length point-colors) 0)
+             (dotimes (f (length faces))
+               (gl:begin :polygon)
+               (let ((n (aref face-normals f)))
+                 (gl:normal (p:x n) (p:y n) (p:z n)))
+               (dolist (pref (aref faces f))
+                 (let ((p (aref points pref))
+                       (c (aref point-colors pref)))
+                   (gl:color (c-red c) (c-green c) (c-blue c))
+                   (gl:vertex (p:x p) (p:y p) (p:z p))))
+               (gl:end)))
+              (*do-smooth-shading?*
+               (dotimes (f (length faces))
+                 (gl:begin :polygon)
+                 (dolist (pref (aref faces f))
+                   (let ((p (aref points pref))
+                         (n (aref point-normals pref)))
+                     (gl:normal (p:x n) (p:y n) (p:z n))
+                     (gl:color r g b)
+                     (gl:vertex (p:x p) (p:y p) (p:z p))))
+                 (gl:end)))
+              (t
+               (dotimes (f (length faces))
+                 (gl:begin :polygon)
+                 (let ((n (aref face-normals f)))
+                   (gl:normal (p:x n) (p:y n) (p:z n)))
+                 (dolist (pref (aref faces f))
+                   (let ((p (aref points pref)))
+                     (gl:color r g b)
+                     (gl:vertex (p:x p) (p:y p) (p:z p))))
+                 (gl:end)))))))
+
+(defmethod 3d-draw-filled-polygons-aux-SAV (points faces face-normals point-normals point-colors)
+  (let ((col (shading-color *drawing-settings*)))
+    (gl-set-material col)
+    (with-gl-enable :color-material
+      (gl:color-material :front-and-back :diffuse)
+      (dotimes (f (length faces))
+        (gl:begin :polygon)
+        (when (not *do-smooth-shading?*)
+          (let ((n (aref face-normals f)))
+            (gl:normal (p:x n) (p:y n) (p:z n))))
+        (dolist (pref (aref faces f))
+          (if (> (length point-colors) 0)
+              (let ((c (aref point-colors pref)))
+                (gl:color (c-red c) (c-green c) (c-blue c)))
+              (gl:color (c-red col) (c-green col) (c-blue col))) ;inefficient...
+          (when *do-smooth-shading?*
+            (let ((n (aref point-normals pref)))
+              (gl:normal (p:x n) (p:y n) (p:z n))))
+          (let ((p (aref points pref)))
+            (gl:vertex (p:x p) (p:y p) (p:z p))))
+        (gl:end)))))
 
 (defun 3d-draw-highlighted-polygons (points faces face-normals point-normals faces-highlighted)
   (if *do-lighting?*
@@ -368,22 +426,23 @@
     (3d-draw-highlighted-polygons-aux points faces face-normals point-normals faces-highlighted)))
 
 (defmethod 3d-draw-highlighted-polygons-aux (points faces face-normals point-normals faces-highlighted)
-  (with-gl-enable :color-material
-    (gl:color-material :front-and-back :diffuse)
-    (dotimes (f (length faces))
-      (when (aref faces-highlighted f)
-        (gl:begin :polygon)
-        (when (not *do-smooth-shading?*)
-          (let ((n (aref face-normals f)))
-            (gl:normal (x n) (y n) (z n))))
-        (dolist (pref (aref faces f))
-          (gl:color (c-red *sel-color*) (c-green *sel-color*) (c-blue *sel-color*))
-          (when *do-smooth-shading?*
-            (let ((n (aref point-normals pref)))
-              (gl:normal (x n) (y n) (z n))))
-          (let ((p (aref points pref)))
-            (gl:vertex (x p) (y p) (z p))))
-      (gl:end)))))
+  (let ((sel-col (sel-color *drawing-settings*)))
+    (with-gl-enable :color-material
+      (gl:color-material :front-and-back :diffuse)
+      (dotimes (f (length faces))
+        (when (aref faces-highlighted f)
+          (gl:begin :polygon)
+          (when (not *do-smooth-shading?*)
+            (let ((n (aref face-normals f)))
+              (gl:normal (p:x n) (p:y n) (p:z n))))
+          (dolist (pref (aref faces f))
+            (gl:color (c-red sel-col) (c-green sel-col) (c-blue sel-col))
+            (when *do-smooth-shading?*
+              (let ((n (aref point-normals pref)))
+                (gl:normal (p:x n) (p:y n) (p:z n))))
+            (let ((p (aref points pref)))
+              (gl:vertex (p:x p) (p:y p) (p:z p))))
+          (gl:end))))))
 
 (defun 3d-draw-wireframe-polygons (points faces &key (closed? t))
   (gl:polygon-mode :front-and-back :line)
@@ -396,15 +455,15 @@
           (gl:begin :line-strip))
       (dolist (pref (aref faces f))
         (let ((p (aref points pref)))
-          (gl:vertex (x p) (y p) (z p))))
+          (gl:vertex (p:x p) (p:y p) (p:z p))))
       (gl:end))))
 
 ;;; 2d display =================================================================
 
-(defun 2d-setup-projection ()
+(defun 2d-setup-projection (w h)
   (gl:matrix-mode :projection)
   (gl:load-identity)
-  (gl:ortho 0.0 (first *window-size*) (second *window-size*) 0.0 -1.0 1.0) ; y=0 at top
+  (gl:ortho 0.0 w h 0.0 -1.0 1.0) ; y=0 at top
   (gl:matrix-mode :modelview)
   (gl:load-identity)
   (gl:disable :depth-test)
