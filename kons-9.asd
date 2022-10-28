@@ -85,6 +85,7 @@
    (:file "src/plugins/force-field")
    (:file "src/plugins/dynamics-animator")
    (:file "src/plugins/flex-animator")
+   (:file "src/plugins/boid-system")
    (:file "src/plugins/procedural-curve")
    (:file "src/plugins/scalar-field")
    (:file "src/plugins/isosurface")
@@ -96,6 +97,20 @@
    (:file "src/plugins/usd")
    (:file "src/plugins/obj")
    ))
+
+(asdf:defsystem #:kons-9/testsuite
+  :description "Testsuite for Common Lisp 3D Graphics System"
+  :author "Kaveh Kardan"
+  :license "MIT"
+  :depends-on (:alexandria :org.melusina.confidence :kons-9)
+  :components
+  ((:module "testsuite"
+    :components ((:file "package")
+		 (:file "assertions")
+ 		 (:module "kernel"
+ 		  :components ((:file "utils")
+			       (:file "point-cloud")))
+ 		 (:file "entrypoint")))))
 
 #+nil (asdf:load-system :kons-9)
 
