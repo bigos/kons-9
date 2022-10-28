@@ -46,8 +46,8 @@
             (setf (aref (point-colors mesh) (uv-mesh-1d-ref mesh  u v))
                   (funcall color-fn u0 v0))))))))
 
-(defmethod set-point-colors-by-uv ((group group) color-fn)
-  (dolist (child (children group))
+(defmethod set-point-colors-by-uv ((group shape-group) color-fn)
+  (do-children (child group)
     (set-point-colors-by-uv child color-fn)))
 
 (defun index+1 (index dim wrap?)
@@ -176,7 +176,7 @@
     (setf (v-dim mesh) (length unique-path-points))
     (setf (u-wrap mesh) is-closed-profile?)
     (setf (v-wrap mesh) is-closed-path?)
-    (setf (v-cap mesh) t)
+    (setf (v-cap mesh) is-closed-profile?)
     (let* ((delta (/ 1.0 (1- (v-dim mesh))))
            (prev-tangent +z-axis+)
            (p0 +origin+)
@@ -228,11 +228,10 @@
 
 ;;; TODO -- fix coerce to list
 (defmethod sweep-extrude-uv-mesh (profile path &key (twist 0.0) (taper 1.0) (from-end? nil))
-  (declare (optimize debug))
   (sweep-extrude-aux (make-instance 'uv-mesh)
-                        (coerce (points profile) 'list) (is-closed-curve? profile)
-                        (points path) (is-closed-curve? path)
-                        :twist twist :taper taper :from-end? from-end?))
+                     (coerce (points profile) 'list) (is-closed-curve? profile)
+                     (points path) (is-closed-curve? path)
+                     :twist twist :taper taper :from-end? from-end?))
 
 (defun transform-extrude-uv-mesh (profile transform num-steps &key (v-wrap nil) (u-cap nil) (v-cap t))
   (let ((mesh (make-instance 'uv-mesh :u-dim (length (points profile))
@@ -308,3 +307,22 @@
                               longitude-segments
                               :v-wrap t
                               :v-cap nil)))
+
+;;;; gui =======================================================================
+
+(defun uv-mesh-command-table ()
+  (let ((table (make-instance `command-table :title "Create UV Mesh")))
+    (ct-make-shape :C "Cone"     (make-cone-uv-mesh 2 2 16 7))
+    (ct-make-shape :Y "Cylinder" (make-cylinder-uv-mesh 1.5 3 16 4))
+    (ct-make-shape :G "Grid"     (make-grid-uv-mesh 3 1.5 1 1))
+    (ct-make-shape :P "Prism"    (make-rect-prism-uv-mesh 1.5 3 4 2))
+    (ct-make-shape :R "Pyramid"  (make-pyramid-uv-mesh 2 2 5 3))
+    (ct-make-shape :S "Sphere"   (make-sphere-uv-mesh 1.5 8 16))
+    (ct-make-shape :T "Torus"    (make-torus-uv-mesh 1.0 2.0 8 32))
+    table))
+
+(register-dynamic-command-table-entry
+ "Create" :u "Create UV Mesh Menu"
+ (lambda () (make-active-command-table (uv-mesh-command-table)))
+ (lambda () t))
+

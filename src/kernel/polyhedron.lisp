@@ -6,7 +6,6 @@
   ((faces :accessor faces :initarg :faces :initform (make-array 0 :adjustable t :fill-pointer t))
    (face-normals :accessor face-normals :initarg :face-normals :initform (make-array 0 :adjustable t :fill-pointer t))
    (point-normals :accessor point-normals :initarg :point-normals :initform (make-array 0 :adjustable t :fill-pointer t))
-   (point-colors :accessor point-colors :initarg :point-colors :initform nil)
    (show-normals :accessor show-normals :initarg :show-normals :initform nil)  ; length or nil
    (point-source-use-face-centers? :accessor point-source-use-face-centers? :initarg :point-source-use-face-centers? :initform nil)))
 
@@ -35,21 +34,23 @@
           (push (incf i) p-refs))
         (vector-push-extend (nreverse p-refs) (faces polyh))))))
 
-;; replaced by freeze-transform
-;; (defmethod polyhedron-bake ((polyh polyhedron))
-;;   (let ((mtx (transform-matrix (transform polyh))))
-;;     (dotimes (i (length (points polyh)))
-;;       (setf (aref (points polyh) i)
-;;             (transform-point (aref (points polyh) i) mtx))))
-;;   (reset-transform (transform polyh))
-;;   polyh)
+;; set geo from a list of triplet arrays of xyz vectors
+(defmethod set-triangle-arrays ((polyh polyhedron) triangle-arrays)
+  (empty-polyhedron polyh)
+  (let ((i -1))
+    (dolist (triangle-array triangle-arrays)
+      (let ((p-refs '()))
+        (do-array (ignore-2 vec3 triangle-array)
+          (vector-push-extend (p-vec vec3) (points polyh))
+          (push (incf i) p-refs))
+        (vector-push-extend (nreverse p-refs) (faces polyh))))))
 
 (defmethod freeze-transform :after ((polyh polyhedron))
   (compute-face-normals polyh)
   (compute-point-normals polyh))  
 
 (defmethod face-center ((polyh polyhedron) face)
-  (apply #'p-average (face-points polyh face)))
+  (apply #'p-average (face-points-list polyh face)))
 
 (defmethod face-centers ((polyh polyhedron))
   (map 'vector #'(lambda (f) (face-center polyh f)) (faces polyh)))
@@ -87,7 +88,7 @@
 
 (defmethod compute-point-normals ((polyh polyhedron))
   (let ((p-normals (make-array (length (points polyh)) :initial-element (p! 0 0 0))))
-    (doarray (f face (faces polyh))
+    (do-array (f face (faces polyh))
       (dolist (pref face)
         (setf (aref p-normals pref)
               (p:+ (aref p-normals pref)
@@ -109,35 +110,28 @@
     (setf (aref (point-normals polyh) n)
           (p:normalize (aref (point-normals polyh) n)))))
 
-(defmethod face-points ((polyh polyhedron) i)
+(defmethod face-points-list ((polyh polyhedron) (i integer))
   (mapcar #'(lambda (pref) (aref (points polyh) pref))
           (aref (faces polyh) i)))
 
-(defmethod face-points ((polyh polyhedron) (face list))
+(defmethod face-points-list ((polyh polyhedron) (face list))
   (mapcar #'(lambda (pref) (aref (points polyh) pref))
           face))
+
+(defmethod face-points-array ((polyh polyhedron) (i integer))
+  (coerce (face-points-list polyh i) 'vector))
+
+(defmethod face-points-array ((polyh polyhedron) (face list))
+  (coerce (face-points-list polyh face) 'vector))
 
 (defmethod reverse-face-normals ((polyh polyhedron))
   (dotimes (i (length (face-normals polyh)))
     (setf (aref (face-normals polyh) i) (p:negate (aref (face-normals polyh) i))))
   polyh)
 
-(defmethod allocate-point-colors ((polyh polyhedron))
-  (setf (point-colors polyh) (make-array (length (points polyh))
-                                         :initial-element *shading-color*)))
-  
-(defmethod reset-point-colors ((polyh polyhedron))
-  (allocate-point-colors polyh)
-  polyh)
-
-(defmethod set-point-colors-by-xyz ((polyh polyhedron) color-fn)
-  (allocate-point-colors polyh)
-  (doarray (i p (points polyh))
-    (setf (aref (point-colors polyh) i) (funcall color-fn p))))
-
 (defmethod set-point-colors-by-point-and-normal ((polyh polyhedron) color-fn)
   (allocate-point-colors polyh)
-  (doarray (i p (points polyh))
+  (do-array (i p (points polyh))
     (let ((n (aref (point-normals polyh) i)))
       (setf (aref (point-colors polyh) i) (funcall color-fn p n)))))
 
@@ -148,10 +142,10 @@
 
 (defmethod refine-face ((polyh polyhedron) face)
   (let* ((point-lists '())
-         (points (face-points polyh face))
+         (points (face-points-list polyh face))
          (center (p-center points))
-        (face-points (coerce points 'vector))
-        (n (length points)))
+         (face-points (coerce points 'vector))
+         (n (length points)))
     (dotimes (i n)
       (push (list (aref face-points i)
                   (p-average (aref face-points i) (aref face-points (mod (1+ i) n)))
@@ -178,10 +172,13 @@
         (refine-polyhedron (make-polyhedron (coerce points 'vector) (coerce faces 'vector)) (1- levels)))))
 
 (defmethod merge-points ((polyh polyhedron))
+  (when (or (= 0 (length (points polyh)))
+            (= 0 (length (faces polyh))))
+    (return-from merge-points polyh))
   (let ((hash (make-hash-table :test 'equal))
         (count -1)
         (new-refs (make-array (length (points polyh)))))
-    (doarray (i p (points polyh))
+    (do-array (i p (points polyh))
       (let ((j (gethash (point->list p) hash)))
         (if (null j)
             (progn
@@ -191,9 +188,9 @@
             (setf (aref new-refs i) j))))
     (let ((new-points (make-array (1+ (apply #'max (coerce new-refs 'list)))))
           (new-faces (make-array (length (faces polyh)))))
-      (doarray (i p (points polyh))
+      (do-array (i p (points polyh))
         (setf (aref new-points (aref new-refs i)) p))
-      (doarray (i f (faces polyh))
+      (do-array (i f (faces polyh))
         (setf (aref new-faces i) (mapcar (lambda (ref) (aref new-refs ref)) f)))
       (make-polyhedron new-points new-faces))))
 
@@ -238,7 +235,7 @@
         (points '()))
     (dotimes (f (length (faces tri-polyh)))
       (let* ((area (face-area tri-polyh (aref (faces tri-polyh) f)))
-             (face-points (face-points tri-polyh f))
+             (face-points (face-points-list tri-polyh f))
              (p0 (elt face-points 0))
              (p1 (elt face-points 1))
              (p2 (elt face-points 2))

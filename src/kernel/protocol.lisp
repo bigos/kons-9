@@ -26,13 +26,14 @@
   (:method ((obj t)) 
     (error "Method SOURCE-DIRECTIONS not implemented for object ~a" obj))
 
-  (:method ((curve curve))
-    (curve-tangents curve))
-
   (:method ((p-cloud point-cloud))
     ;; arbitrarily return (1 1 1) for use as velocity multiplier
-    (make-array (length (points p-cloud))
-                :initial-element (p! 1 1 1)))
+    ;; (make-array (length (points p-cloud))
+    ;;             :initial-element (p! 1 1 1)))
+    (source-radial-directions p-cloud))
+  
+  (:method ((curve curve))
+    (curve-tangents curve))
 
   (:method ((polyh polyhedron))
     (if (point-source-use-face-centers? polyh)
@@ -50,15 +51,16 @@
     (let* ((points (source-points obj))
            (min-dist (p-dist point (aref points 0)))
            (closest-index 0))
-      (doarray (i p points)
-               (let ((dist (p-dist point p)))
-                 (when (< dist min-dist)
-                   (setf min-dist dist)
-                   (setf closest-index i))))
+      (do-array (i p points)
+        (let ((dist (p-dist point p)))
+          (when (< dist min-dist)
+            (setf min-dist dist)
+            (setf closest-index i))))
       (aref points closest-index))))
 
 ;;;; curve-source-protocol =====================================================
 
+;;; return a list of "curves" where each curve is an array of points
 (defgeneric provides-curve-source-protocol? (obj)
   (:method ((obj t)) nil)
   (:method ((curve curve)) t)
@@ -77,7 +79,7 @@
   (:method ((polyh polyhedron))
     (let ((curves '()))
       (dotimes (f (length (faces polyh)))
-        (push (face-points polyh f) curves))
+        (push (face-points-array polyh f) curves))
       (nreverse curves)))
   )
 

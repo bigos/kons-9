@@ -3,7 +3,8 @@
 ;;;; point-cloud ========================================================
 
 (defclass point-cloud (shape)
-  ((points :accessor points :initarg :points :initform (make-array 0 :adjustable t :fill-pointer t))))
+  ((points :accessor points :initarg :points :initform (make-array 0 :adjustable t :fill-pointer t))
+   (point-colors :accessor point-colors :initarg :point-colors :initform nil)))
 
 (defmethod printable-data ((self point-cloud))
   (strcat (call-next-method) (format nil ", ~a points" (length (points self)))))
@@ -15,10 +16,32 @@
   (let* ((points (points p-cloud))
          (bounds-lo (p:copy (aref points 0)))
          (bounds-hi (p:copy (aref points 0))))
-    (doarray (i p points)
-             (p:min! bounds-lo bounds-lo p)
-             (p:max! bounds-hi bounds-hi p))
+    (do-array (i p points)
+      (p:min! bounds-lo bounds-lo p)
+      (p:max! bounds-hi bounds-hi p))
     (values bounds-lo bounds-hi)))
+
+;;; TODO -- not tested
+(defmethod get-global-bounds ((p-cloud point-cloud))
+  (when (= 0 (length (points p-cloud)))
+    (warn "Shape ~a does not have any points. Using default bounds values." p-cloud)
+    (return-from get-global-bounds (values (p! -1 -1 -1) (p! 1 1 1))))
+  (let* ((points (points p-cloud))
+         (bounds-lo (p:copy (aref points 0)))
+         (bounds-hi (p:copy (aref points 0))))
+    (if (scene p-cloud)
+        (let* ((paths (get-shape-paths (scene p-cloud) p-cloud))
+               (path (first paths))
+               (matrix (if path (shape-global-matrix (scene p-cloud) path) nil)))
+          (if matrix
+              (progn
+                (do-array (i p points)
+                  (let ((xform-p (transform-point p matrix)))
+                    (p:min! bounds-lo bounds-lo xform-p)
+                    (p:max! bounds-hi bounds-hi xform-p)))
+                (values bounds-lo bounds-hi))
+              (get-bounds p-cloud)))
+        (get-bounds p-cloud))))
 
 (defun make-point-cloud (points)
   (make-instance 'point-cloud :points points))
@@ -27,6 +50,19 @@
   (transform-points! (points p-cloud) (transform-matrix (transform p-cloud)))
   (reset-transform (transform p-cloud))
   p-cloud)
+
+(defmethod allocate-point-colors ((p-cloud point-cloud))
+  (setf (point-colors p-cloud) (make-array (length (points p-cloud))
+                                           :initial-element (shading-color *drawing-settings*))))
+  
+(defmethod reset-point-colors ((p-cloud point-cloud))
+  (allocate-point-colors p-cloud)
+  p-cloud)
+
+(defmethod set-point-colors-by-xyz ((p-cloud point-cloud) color-fn)
+  (allocate-point-colors p-cloud)
+  (do-array (i p (points p-cloud))
+    (setf (aref (point-colors p-cloud) i) (funcall color-fn p))))
 
 ;;; point generator functions --------------------------------------------------
 

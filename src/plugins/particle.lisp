@@ -204,7 +204,7 @@
 (defclass particle-system (polyhedron animator)
   ((particles :accessor particles :initarg :particles :initform (make-array 0 :adjustable t :fill-pointer t))
    (max-generations :accessor max-generations :initarg :max-generations :initform -1) ; -1 = no maximum
-   (point-generator-use-live-positions-only :accessor point-generator-use-live-positions-only :initarg :point-generator-use-live-positions-only :initform nil)
+   (point-source-use-live-positions-only :accessor point-source-use-live-positions-only :initarg :point-source-use-live-positions-only :initform nil)
    (draw-live-points-only? :accessor draw-live-points-only? :initarg :draw-live-points-only? :initform t)
    (draw-trails :accessor draw-trails :initarg :draw-trails :initform -1))) ;length, -1 = draw entire trail
 
@@ -214,12 +214,12 @@
             (length (particles self)))))
 
 (defmethod add-force-field ((p-sys particle-system) (field force-field))
-  (doarray (i ptcl (particles p-sys))
+  (do-array (i ptcl (particles p-sys))
     (push field (force-fields ptcl)))
   p-sys)
 
 (defmethod mutate-particle-system ((p-sys particle-system) factor)
-  (doarray (i ptcl (particles p-sys))
+  (do-array (i ptcl (particles p-sys))
     (mutate-particle ptcl factor))
   p-sys)
 
@@ -227,21 +227,23 @@
   (when *display-wireframe?*
     (draw-wireframe p-sys))
   (when *display-points?*
-    (draw-points p-sys)))
+    (draw-points p-sys nil)))
 
 ;;; TODO -- trail not implemented
 (defmethod draw-wireframe ((p-sys particle-system))
   (3d-draw-wireframe-polygons (points p-sys) (faces p-sys) :closed? nil))
 
-(defmethod draw-live-points ((p-sys particle-system))
+(defmethod draw-live-points ((p-sys particle-system) use-point-colors?)
+  (declare (ignore use-point-colors?))  ;TODO -- maybe implement later
   (let ((visible-points '()))
-    (doarray-if (i ptcl #'is-alive? (particles p-sys))
-                (push (pos ptcl) visible-points))
-    (3d-draw-points (make-array (length visible-points) :initial-contents visible-points))))
+    (do-array-if (i ptcl #'is-alive? (particles p-sys))
+      (push (pos ptcl) visible-points))
+    (3d-draw-points (make-array (length visible-points) :initial-contents visible-points)
+                    nil)))
 
-(defmethod draw-points ((p-sys particle-system))
+(defmethod draw-points ((p-sys particle-system) use-point-colors?)
   (if (draw-live-points-only? p-sys)
-      (draw-live-points p-sys)
+      (draw-live-points p-sys use-point-colors?)
       (call-next-method)))
 
 (defmethod draw-normals ((p-sys particle-system))
@@ -261,7 +263,7 @@
 
 (defmethod update-motion ((p-sys particle-system) parent-absolute-timing)
   (declare (ignore parent-absolute-timing))
-  (doarray (i ptcl (particles p-sys))
+  (do-array (i ptcl (particles p-sys))
     (when (or (= -1 (max-generations p-sys))
               (<= (generation ptcl) (max-generations p-sys)))
       (when (is-alive? ptcl)
@@ -271,33 +273,39 @@
       (dolist (child (do-spawn ptcl))
         (add-particle p-sys child)))))
 
+;;;; point-source-protocol =====================================================
+
 (defmethod source-points ((p-sys particle-system))
   (let ((points '()))
-    (if (point-generator-use-live-positions-only p-sys)
-        (doarray-if (i ptcl #'is-alive? (particles p-sys))
+    (if (point-source-use-live-positions-only p-sys)
+        (do-array-if (i ptcl #'is-alive? (particles p-sys))
           (push (pos ptcl) points))
         (dotimes (i (length (faces p-sys)))
-          (let ((curve (reverse (face-points p-sys i))))
+          (let ((curve (reverse (face-points-list p-sys i))))
             (setf points (append curve points))))) ;use all points of face
     (make-array (length points) :initial-contents points)))
 
 (defmethod source-directions ((p-sys particle-system))
   (let ((tangents #()))
     (dotimes (i (length (faces p-sys)))
-      (let* ((fp-reversed (reverse (face-points p-sys i)))
+      (let* ((fp-reversed (reverse (face-points-list p-sys i)))
             (curve (make-array (length fp-reversed) :initial-contents fp-reversed)))
         (setf tangents (concatenate 'vector (curve-tangents-aux curve nil) tangents))))
         ;; (setf tangents (append (curve-tangents-aux curve nil) tangents))))
     tangents))
 
+;;;; curve-source-protocol =====================================================
+
 (defmethod source-curves ((p-sys particle-system))
   (let ((curves '()))
     (dotimes (f (length (faces p-sys)))
-      (push (reverse (face-points p-sys f)) curves)) ;reverse face points
+      (push (reverse (face-points-array p-sys f)) curves)) ;reverse face points
     (nreverse curves)))
 
 (defmethod source-curves-closed ((p-sys particle-system))
   (make-list (length (faces p-sys)) :initial-element nil)) ;always open
+
+
 
 (defmethod make-particle-system (p-gen vel num max-gen particle-class &rest initargs)
   (apply #'make-particle-system-aux
@@ -329,3 +337,42 @@
                                           initargs))))
     p-sys))
 
+
+;;;; gui =======================================================================
+
+(defun single-point-source-selected? ()
+  (let ((selected-shapes (selected-shapes (scene *default-scene-view*))))
+    (and (= 1 (length selected-shapes))
+         (provides-point-source-protocol? (first selected-shapes)))))
+
+(defun make-dynamic-particle-system ()
+  (let* ((scene (scene *default-scene-view*))
+         (p-source (selected-shape scene))
+         (p-sys (make-particle-system p-source
+                                      (p! .2 .2 .2) 1 -1 'dynamic-particle
+                                      :force-fields (list (make-instance 'constant-force-field
+                                                                         :force-vector (p! 0 -.02 0))))))
+     (add-motion scene p-sys)
+    p-sys))
+
+(defun make-wriggly-particle-system ()
+  (let* ((scene (scene *default-scene-view*))
+         (p-source (selected-shape scene))
+         (p-sys (make-particle-system p-source
+                                      (p! .2 .2 .2) 1 -1 'particle
+                                      :update-angle (range-float (/ pi 8) (/ pi 16)))))
+    (add-motion scene p-sys)
+    p-sys))
+
+(defun particle-command-table ()
+  (let ((table (make-instance `command-table :title "Create Particle System")))
+    (ct-make-shape :D "Dynamic Particles" (when (single-point-source-selected?)
+                                            (make-dynamic-particle-system)))
+    (ct-make-shape :W "Wriggly Particles" (when (single-point-source-selected?)
+                                            (make-wriggly-particle-system)))
+    table))
+
+(register-dynamic-command-table-entry
+ "Context" :P "Create Particle System"
+ (lambda () (make-active-command-table (particle-command-table)))
+ #'single-point-source-selected?)
