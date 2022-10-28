@@ -2,6 +2,10 @@
 
 ## An IDE For 3D Production
 
+Teaser trailer for the project:
+
+https://www.youtube.com/watch?v=THMzaVDaZP8
+
 **kons-9** is a new 3D computer graphics and animation software system being developed as an **open source project** under the MIT license. It broadly falls under the category of a **3D digital content creation tool**, while providing interesting and unique features not found in other systems. The intention is to develop a **flexible and extensible system** in which can be built a wide variety of application and domain specific tools and packages.
 
 The unique differentiating aspect of **kons-9** is that it combines the power of a **software development IDE** with the visual tools of **3D graphics authoring system**. It does this by being implemented in **Common Lisp**, an **object-oriented dynamic language** which provides powerful facilities for **exploratory development and rapid prototyping** within a live interactive software environment.
@@ -56,3 +60,42 @@ Type 'h' in the window to see the available key bindings.
 Open `test/demo-kernel.lisp` and start evaluating the blocks of code for the demos. Things should appear in the graphics window.
 
 Have fun.
+
+## Run the Testsuite as a Batch Job
+
+Use development script `development/testsuite` to run the testsuite as
+a batch job. Specific tests can be requested by adding one argument to
+the command line, such as
+
+    development/testsuite exercise-clamp
+    development/testsuite testsuite-utils
+
+The following command lists all available tests
+
+    development/testsuite list-all-available-tests
+
+## Run the Testsuite from the REPL
+
+Load the system:
+
+    (ql:quickload "kons-9/testsuite")
+
+List all available tests with
+
+    (kons-9/testsuite:list-all-available-tests)
+
+Tests are implemented as regular functions and can be run with
+statements similar to
+
+    (kons-9/testsuite:run-all-available-tests)
+
+or
+
+    (kons-9/testsuite:exercise-clamp)
+    (kons-9/testsuite:testsuite-utils)
+
+Users not familiar with [Confidence][confidence-home] may want to
+review the [quick introduction to Confidence][confidence-intro].
+
+  [confidence-home]: https://github.com/melusina-org/cl-confidence
+  [confidence-intro]: https://github.com/melusina-org/cl-confidence/blob/main/example/example.lisp
