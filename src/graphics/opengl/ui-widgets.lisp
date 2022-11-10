@@ -37,6 +37,10 @@
    (ui-w 0.0)
    (ui-h 0.0)))
 
+(defmethod print-object ((self ui-rect) stream)
+  (print-unreadable-object (self stream :type t)
+    (format stream "X: ~a, Y: ~a, W: ~a, H: ~a" (ui-x self) (ui-y self) (ui-w self) (ui-h self))))
+
 (defmethod ui-right ((rect ui-rect))
   (+ (ui-x rect) (ui-w rect)))
 
@@ -166,8 +170,8 @@
 ;;; TODO ++ handle char input properly
 ;;; TODO ++ do not insert modifier key text
 ;;; TODO ++ draw cursor when is *ui-keyboard-focus*
+;;; TODO ++ arrow keys
 ;;; TODO -- mark region (shift-click, drag, double click, etc)
-;;; TODO -- arrow keys
 
 (defun insert-string (string insert position)
   (concatenate 'string
@@ -481,14 +485,6 @@
     (ui-add-child box (update-layout buttons-group))
     (update-layout box)))
 
-#|
-(setf (ui-contents *default-scene-view*)
-      (list (make-text-input-dialog-box "Save Scene File" (lambda (str) (save-scene *scene* str)))))
-
-(setf (ui-contents *default-scene-view*)
-      (list (make-text-input-dialog-box "Open Scene File" (lambda (str) (load-scene str)))))
-|#
-
 ;;; TODO -- how to add contextual items from plugins?
 ;;;         -- plugin class -- register method adds UI elements -- eg. Create, Context, Edit, ...
 ;;; TODO -- delete shapes in hierarchy
@@ -583,16 +579,13 @@
   (update-layout view))
 
 ;;;; TODO xxx
-;;++ app table bindings in effect even if menu not visible
-;;++ two-line status bar
-;;  ++ mouse action, key action
 ;;-- context menu
-;;  -- transform
+;;  ++ transform
 ;;  -- register/generate entries
 ;;-- register new command tables from plugins
 ;;  -- procedural-curve
-;;  -- uv-mesh
-;;  -- heightfield
+;;  ++ uv-mesh
+;;  ++ heightfield
 ;;-- auto-generate procedural-curve create and edit dialogs
 ;;-- application class?
 ;;-- multiple visible inspectors? esc closes one under mouse?
@@ -607,6 +600,9 @@
 ;;;; arrow and Enter menu/command-table navigation
 
 #| DONE
+;;++ app table bindings in effect even if menu not visible
+;;++ two-line status bar
+;;  ++ mouse action, key action
 ;;;; store parent for ui-view
 ;;;; ui-message-box -- OK button, text
 ;;;; -- update-layout
@@ -702,8 +698,12 @@
 (defmethod add-parent-contents ((view ui-outliner-item) &key (recurse? nil))
   (let ((i (position view (children (ui-parent view))))
         (children (children (data view))))
-;    (dotimes (j (min 10 (length children))) ;cap num children entries to 10 to avoid text engine overflow
-    (dotimes (j (length children)) ;cap num children entries to 10 to avoid text engine overflow
+    (dotimes (j (min 10 (length children)))
+      ;; TODO -- cap num children entries to 10 to avoid text engine overflow
+      ;; clipping does not work in all cases -- looks like outliner-view draw gets called without
+      ;; update-layout being called -- maybe due to text render threading?
+      ;; happens when shapes inspector is open and point-instancer-group demo in demo-misc.lisp
+      ;; is run
       (let* ((child (aref children j))
              (text (format nil "~a" (printable-data child)))
              (item (make-instance (outliner-item-class (ui-parent view))
@@ -718,7 +718,7 @@
                                   :data child
                                   :text text
                                   :is-active? t
-                                  :help-string (format nil "Mouse: select ~a, [ALT] show/hide children"
+                                  :help-string (format nil "Mouse: select ~a" ;, [ALT] show/hide children"
                                                        (name child)))))
         (ui-add-child-at (ui-parent view) item (incf i))
         (add-outliner-child view item))))
@@ -736,7 +736,6 @@
 ;;;; ui-outliner-viewer ========================================================
 
 (defclass-kons-9 ui-outliner-viewer (ui-sequence-viewer)
-;  ((roots nil))
   ((data-object nil)
    (data-accessor-fn nil)
    (items-show-children '()))
@@ -789,9 +788,10 @@
                                            :data entry
                                            :text text
                                            :is-active? t
-                                           :help-string (format nil "Mouse: select ~a, [alt] show/hide children"
+                                           :help-string (format nil "Mouse: select ~a" ;, [alt] show/hide children" ; not implemented yet
                                                                 (name entry)))))
-                 (setf (ui-w item) (+ (ui-text-width (outliner-item-text item)) (* 4 *ui-default-spacing*)))
+                 (setf (ui-w item)
+                       (+ (ui-text-width (outliner-item-text item)) (* 4 *ui-default-spacing*)))
                  (ui-add-child view item)
                  ;; show children if any
                  (when (and (has-children-method? (data item)) (show-children? item))
@@ -877,6 +877,15 @@
 ;;;; drawing ===================================================================
 
 (defun ui-is-clipped? (x-lo y-lo x-hi y-hi)
+
+  ;; (print (list x-lo y-lo x-hi y-hi
+  ;;              *ui-clip-rect*
+  ;;              (and *ui-clip-rect*
+  ;;                   (or (> x-lo (ui-right  *ui-clip-rect*))
+  ;;                       (< x-hi (ui-x      *ui-clip-rect*))
+  ;;                       (> y-lo (ui-bottom *ui-clip-rect*))
+  ;;                       (< y-hi (ui-y      *ui-clip-rect*))))))
+  
   (and *ui-clip-rect*
        (or (> x-lo (ui-right  *ui-clip-rect*))
            (< x-hi (ui-x      *ui-clip-rect*))
@@ -986,6 +995,9 @@
 
   (:method ((view ui-outliner-item) x-offset y-offset)
     (when (is-visible? view)
+
+;      (print (list view (text view) x-offset y-offset))
+      
       (draw-ui-view view x-offset y-offset)
       (with-accessors ((x ui-x) (y ui-y))
           view

@@ -47,6 +47,7 @@
    (:file "src/kernel/motion-group")
    (:file "src/kernel/animator")
    (:file "src/kernel/animation")
+   (:file "src/kernel/interactor")
    (:file "src/kernel/scene")
    (:file "src/kernel/scene-draw")
    (:file "src/kernel/scene-hierarchy")
@@ -96,6 +97,7 @@
    (:file "src/plugins/poly-mesh")
    (:file "src/plugins/usd")
    (:file "src/plugins/obj")
+   (:file "src/plugins/stl")
    ))
 
 (asdf:defsystem #:kons-9/testsuite
