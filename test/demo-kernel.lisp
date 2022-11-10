@@ -6,13 +6,18 @@ Greetings and welcome to kons-9!
 These demos assume that you have succeeded in loading the system and opening
 the graphics window. If you have not, please check the README file.
 
+Make sure you have opened the graphics window by doing:
+
+(in-package :kons-9)
+(run)
+
 The demos below will walk you through some of the features of the software. You
 will evaluate the expressions in each demo and the graphics in the window will
 update accordingly.
 
 We also assume that you are familiar with the basics of 3D graphics.
 
-As of this writing, kons-9 runs on MacOS (Intel & M1) and Linux.
+As of this writing, kons-9 runs on MacOS (Intel & M1), Linux. and Windows.
 
 We hope you find the system enjoyable and useful.
 |#
@@ -101,6 +106,15 @@ The POLYHEDRON class is the basic 3D shape representaion.
                        (translate-to (make-octahedron   2.0) (p! 0 0  0))
                        (translate-to (make-dodecahedron 2.0) (p!  2.5 0 0))
                        (translate-to (make-icosahedron  2.0) (p! 5 0 0)))))
+
+#|
+Flat POLYHEDRON shapes. These are one-sided when backface culling is on.
+|#
+(with-clear-scene
+  (add-shapes *scene* (list
+                       (translate-to (make-rectangle-polyhedron 2 1) (p! -2.5 0 0))
+                       (translate-to (make-square-polyhedron 1.5)    (p!  0   0 0))
+                       (translate-to (make-circle-polyhedron 2.0 32) (p!  2.5 0 0)))))
 
 #|
 Refine (subdivide) a polyhedron.
@@ -343,7 +357,7 @@ You can turn off shading to see axes better (press 1 key).
 (map-shape-hierarchy *scene* (lambda (s) (setf (show-axis s) 1.0)))
 
 #|
-Animate each joined by a specified number of degrees per frame.
+Animate each joint by a specified number of degrees per frame.
 
 Hold down space key to play animation. Press '[' key to go back to frame 0.
 |#
@@ -847,6 +861,18 @@ Hold down space key to play animation. Press '[' key to go back to frame 0.
   (dolist (motion motion-group-instances)
     (print motion)))
 |#
+
+#|
+(Demo 23 kernel) randomize points ==============================================
+
+Randomize points of a shape. Must be a subclass of POINT-CLOUD.
+|#
+(with-clear-scene
+  (add-shape *scene* (randomize-points (make-circle-curve 4.0 32) (p! .1 .1 0))))
+
+(with-clear-scene
+  (add-shape *scene* (randomize-points (make-cube-sphere 4.0 3) (p! .1 .1 0))))
+
 
 #|
 END ============================================================================

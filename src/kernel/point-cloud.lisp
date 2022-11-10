@@ -47,7 +47,7 @@
   (make-instance 'point-cloud :points points))
 
 (defmethod freeze-transform ((p-cloud point-cloud))
-  (transform-points! (points p-cloud) (transform-matrix (transform p-cloud)))
+  (transform-point-array! (points p-cloud) (transform-matrix (transform p-cloud)))
   (reset-transform (transform p-cloud))
   p-cloud)
 
@@ -158,12 +158,8 @@
                 (setf (aref points (incf i)) (p! x y z))))))))
     points))
 
-;;; TODO - in-place array modification?
-;;; randomize points
-
 (defmethod randomize-points ((p-cloud point-cloud) delta)
-  (setf (points p-cloud)
-	(map 'vector #'(lambda (p)
-                         (let ((offset (p! (rand1 (p:x delta)) (rand1 (p:y delta)) (rand1 (p:z delta)))))
-                           (p:+ p offset)))
-             (points p-cloud))))
+  (do-array (i p (points p-cloud))
+    (let ((offset (p! (rand1 (p:x delta)) (rand1 (p:y delta)) (rand1 (p:z delta)))))
+      (p:+! p p offset)))
+  p-cloud)

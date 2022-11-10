@@ -41,8 +41,6 @@
 
 ;;;; voxel-grid-group ==========================================================
 
-;;; TODO -- when more than 65K children, GUI shape inspector display fails in
-;;; text engine (unsigned 16 overflow)
 (defclass voxel-grid-group (point-instancer-group)
   ((boundary-points? :accessor boundary-points? :initarg :boundary-points? :initform t)))
 
@@ -89,7 +87,8 @@
 (def-procedural-input variant-manager-group visible-index)
 
 (defmethod compute-procedural-node ((self variant-manager-group))
-  (do-children (child self)
-    (setf (is-visible? child) nil))
-  (setf (is-visible? (aref (children self) (visible-index self))) t))
+  (when (> (length (children self)) 0)
+    (do-children (child self)
+      (setf (is-visible? child) nil))
+    (setf (is-visible? (aref (children self) (visible-index self))) t)))
 
